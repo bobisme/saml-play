@@ -9,9 +9,9 @@ require 'zlib'
 # utils ------------------------------------------------------------------------
 
 def h(msg, char)
-  puts ''
-  puts msg.upcase
-  puts char * msg.size
+  STDERR.puts ''
+  STDERR.puts msg.upcase
+  STDERR.puts char * msg.size
 end
 
 define_method(:h1) { |msg| h(msg, '=') }
@@ -34,10 +34,10 @@ def eql(a, b)
   i = 0
   while i <= a.size
     if a[i] != b[i]
-      puts "...#{a[[i-10, 0].max..[i+10, a.size-1].min]}..."
-      puts "#{'-' * 13}^"
-      puts "#{a[i]} != #{b[i]} @ #{i}"
-      puts "#{a[i].ord} != #{b[i].ord} @ #{i}"
+      STDERR.puts "...#{a[[i-10, 0].max..[i+10, a.size-1].min]}..."
+      STDERR.puts "#{'-' * 13}^"
+      STDERR.puts "#{a[i]} != #{b[i]} @ #{i}"
+      STDERR.puts "#{a[i].ord} != #{b[i].ord} @ #{i}"
       return false
     end
     i += 1
@@ -55,7 +55,8 @@ ASSERTION_CONSUMER_SERVICE_URL = 'https://resource.example.com/saml/consume'
 SSO_DESTINATION = 'https://auth.example.com/saml/sso/trust'
 
 # HARDCODED FOR DEMONSTRATION, DO NOT USE THESE!!!!
-CERT = <<-CERT
+
+CERT = <<-EOF
 -----BEGIN CERTIFICATE-----
 MIIDGzCCAgOgAwIBAgIICgZNt31bqJIwDQYJKoZIhvcNAQELBQAwIDEeMBwGA1UE
 AxMVbWluaWNhIHJvb3QgY2EgMzQwNzIwMCAXDTE4MTAxMzA5MjYzOVoYDzIxMDgx
@@ -75,8 +76,8 @@ Bt5y13VepcUDzRJktmOuEDMGE1750E/tL/WX+ABw5TcGte7qQFI/nRSHoZl8fmQ6
 +NhdIOvIwySnq8ouwI4vKeKTHPs3jlJ7g4g6yT8IsZJ7C+Qj/PXEl7Lbz36HkclP
 Vt6cYjiri6H6yqJsVEyBvxRPJULTGr3E3scwdhZB1Q==
 -----END CERTIFICATE-----
-CERT
-PRIVATE_KEY = <<-PK
+EOF
+PRIVATE_KEY = <<-EOF
 -----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAtWINs0jqRjRjgaxaKRLa5XoY+XWVA8a8n0KOxsVVtZ2nfDn9
 0kIwnzK/IRy8azhtKTBcM+6IRK1QHm3xY8z+1qciaMOe4IExS/6R7qixoLLrTqAu
@@ -104,19 +105,19 @@ j+casQKBgQDVVQpEHhBkNqJSnrD8KqkAqBhzCyh2/k2zatI4W+hjoVmM8AQcye8e
 w2CArwIZ/xboksnUCuS9nd8tzfvTRiqadin/Ucxg6W1GuAWsAksV/+KXak++sMqJ
 H71hQw80ELH23Z7jIUUR5Tpro60gDzYx0epITEpuZ3kiQqh6VFVuIQ==
 -----END RSA PRIVATE KEY-----
-PK
+EOF
 
 def authn_request
   compact_xml %{
     <samlp:AuthnRequest
       AssertionConsumerServiceURL="#{ASSERTION_CONSUMER_SERVICE_URL}"
       Destination="#{SSO_DESTINATION}"
-      ID="#{SecureRandom.uuid}"
+      ID="_#{SecureRandom.uuid}"
       IssueInstant="#{Time.now.utc.iso8601}"
       Version="2.0"
       xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
       xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">
-      <saml:Issuer>http://https://example.com/saml/metadata</saml:Issuer>
+      <saml:Issuer>https://example.com/saml/metadata</saml:Issuer>
       <samlp:NameIDPolicy
         AllowCreate="true"
         Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress" />
@@ -140,13 +141,13 @@ end
 class Response
   def initialize(request)
     @request = request
-    @email = 'bob@stdin.co'
+    @email = 'bob@example.com'
     @request_id = request[/ID=['"](.+?)['"]/, 1]
     @acs_url = request[/AssertionConsumerServiceURL=['"](.+?)['"]/, 1]
     @response_id = SecureRandom.uuid
     @reference_id = SecureRandom.uuid
     @audience_uri = @acs_url[/^(.*?\/\/.*?\/)/, 1]
-    @issuer_uri = 'https://auth.example.com'
+    @issuer_uri = 'https://auth.example.com/'
     @now = Time.now.utc
     @ttl = 60
   end
@@ -235,7 +236,7 @@ class Response
       <samlp:Response ID="_#{@response_id}" Version="2.0"
         IssueInstant="#{@now.iso8601}" Destination="#{@acs_url}"
         Consent="urn:oasis:names:tc:SAML:2.0:consent:unspecified"
-        #{@request_id ? %[ InResponseTo="#{@saml_request_id}"] : ""}
+        #{@request_id ? %[ InResponseTo="#{@request_id}"] : ""}
         xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">
         <saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">#{@issuer_uri}</saml:Issuer>
         <samlp:Status>
@@ -251,20 +252,20 @@ end
 def main
   h1 'authentication request'
   req = authn_request
-  puts req
+  STDERR.puts req
   h2 'redirect url'
   url = authn_redirect_url(req)
-  puts url
+  STDERR.puts url
   parsed = parse_authn_request(url)
   raise "\n#{req} #{req.size} does not match\n#{parsed} #{parsed.size}\n#{parsed <=> req}" unless eql parsed, req
   h2 'parsed request is the same as the original request'
   res = Response.new(req)
   h2 'assertion'
-  puts res.assertion
+  STDERR.puts res.assertion
   h2 'SignedInfo'
-  puts res.signed_info
+  STDERR.puts res.signed_info
   h2 'signature'
-  puts res.signature
+  STDERR.puts res.signature
   h2 'final response'
   puts res.xml
 end
